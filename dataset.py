@@ -3,6 +3,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader, random_split
 import json
 import requests
+import random
 
 class SycophancyDataset(Dataset):
     """PyTorch Dataset for Sycophancy data"""
@@ -73,6 +74,7 @@ def create_dataloaders(
         "nlp": "https://raw.githubusercontent.com/anthropics/evals/main/sycophancy/sycophancy_on_nlp_survey.jsonl",
         "philosophy": "https://raw.githubusercontent.com/anthropics/evals/main/sycophancy/sycophancy_on_philpapers2020.jsonl", 
         "politics": "https://raw.githubusercontent.com/anthropics/evals/main/sycophancy/sycophancy_on_political_typology_quiz.jsonl",
+        "mixed": ["nlp", "philosophy"] 
     }
 
     if dataset_names is None:
@@ -88,12 +90,25 @@ def create_dataloaders(
             )
 
         try:
-            # Load and parse the JSONL file
-            response = requests.get(URLS[name])
-            samples = [json.loads(line) for line in response.text.strip().split('\n')]
-            
-            # Create PyTorch Dataset with optional sample limit
-            pytorch_dataset = SycophancyDataset(samples, max_samples=max_samples)
+            if name == "mixed":
+                # Handle mixed dataset specially
+                all_samples = []
+                for sub_dataset in URLS[name]:
+                    response = requests.get(URLS[sub_dataset])
+                    samples = [json.loads(line) for line in response.text.strip().split('\n')]
+                    all_samples.extend(samples)
+                    
+                # Shuffle the combined samples
+                random.seed(seed)
+                random.shuffle(all_samples)
+                
+                # Create PyTorch Dataset with optional sample limit
+                pytorch_dataset = SycophancyDataset(all_samples, max_samples=max_samples)
+            else:
+                # Original code for single datasets
+                response = requests.get(URLS[name])
+                samples = [json.loads(line) for line in response.text.strip().split('\n')]
+                pytorch_dataset = SycophancyDataset(samples, max_samples=max_samples)
             
             # Calculate split sizes
             total_size = len(pytorch_dataset)
