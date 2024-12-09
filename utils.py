@@ -13,7 +13,21 @@ class SycophancyDataset(Dataset):
         Args:
             samples: List of dictionaries containing questions and answers
         """
-        self.samples = samples
+        # Flatten samples to handle multiple non-sycophantic answers
+        self.samples = []
+        for sample in samples:
+            non_sycophantic_answers = sample["answer_not_matching_behavior"]
+            # Convert to list if it's a single string
+            if isinstance(non_sycophantic_answers, str):
+                non_sycophantic_answers = [non_sycophantic_answers]
+                
+            # Create a new sample for each non-sycophantic answer
+            for answer in non_sycophantic_answers:
+                self.samples.append({
+                    "question": sample["question"],
+                    "sycophantic_answer": sample["answer_matching_behavior"],
+                    "non_sycophantic_answer": answer
+                })
         
     def __len__(self) -> int:
         return len(self.samples)
@@ -22,8 +36,8 @@ class SycophancyDataset(Dataset):
         sample = self.samples[idx]
         return {
             "question": sample["question"],
-            "sycophantic_answer": sample["answer_matching_behavior"],
-            "non_sycophantic_answer": sample["answer_not_matching_behavior"]
+            "sycophantic_answer": sample["sycophantic_answer"],
+            "non_sycophantic_answer": sample["non_sycophantic_answer"]
         }
 
 def create_dataloaders(
