@@ -105,7 +105,7 @@ def load_activation_dataloaders(
     save_dir: str,
     model_name: str,
     dataset_name: str,
-    hook: str,  # Changed from layer to hook
+    hook: str, 
     batch_size: int = 32,
     train_split: float = 0.9,
     shuffle: bool = True,
