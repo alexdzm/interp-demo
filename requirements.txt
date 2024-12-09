@@ -1,2 +1,4 @@
 inspect_ai
 ipykernel
+torch>=2.0.0
+requests
