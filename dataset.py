@@ -7,11 +7,12 @@ import requests
 class SycophancyDataset(Dataset):
     """PyTorch Dataset for Sycophancy data"""
     
-    def __init__(self, samples: List[Dict]):
+    def __init__(self, samples: List[Dict], max_samples: Optional[int] = None):
         """Initialize dataset with list of samples
         
         Args:
             samples: List of dictionaries containing questions and answers
+            max_samples: Maximum number of samples to use (for quick testing)
         """
         # Flatten samples to handle multiple non-sycophantic answers
         self.samples = []
@@ -28,6 +29,10 @@ class SycophancyDataset(Dataset):
                     "sycophantic_answer": sample["answer_matching_behavior"],
                     "non_sycophantic_answer": answer
                 })
+        
+        # Optionally limit number of samples
+        if max_samples is not None:
+            self.samples = self.samples[:max_samples]
         
     def __len__(self) -> int:
         return len(self.samples)
@@ -46,7 +51,8 @@ def create_dataloaders(
     train_split: float = 0.8,
     shuffle: bool = True,
     num_workers: int = 4,
-    seed: int = 42
+    seed: int = 42,
+    max_samples: Optional[int] = None
 ) -> Dict[str, Dict[str, DataLoader]]:
     """Create PyTorch DataLoaders for specified datasets with train/test splits
     
@@ -57,6 +63,7 @@ def create_dataloaders(
         shuffle: Whether to shuffle the data
         num_workers: Number of workers for DataLoader
         seed: Random seed for reproducibility
+        max_samples: Maximum number of samples to use per dataset (for quick testing)
         
     Returns:
         Dictionary mapping dataset names to dict containing train and test DataLoaders
@@ -81,12 +88,12 @@ def create_dataloaders(
             )
 
         try:
-            # Directly load and parse the JSONL file
+            # Load and parse the JSONL file
             response = requests.get(URLS[name])
             samples = [json.loads(line) for line in response.text.strip().split('\n')]
             
-            # Create PyTorch Dataset
-            pytorch_dataset = SycophancyDataset(samples)
+            # Create PyTorch Dataset with optional sample limit
+            pytorch_dataset = SycophancyDataset(samples, max_samples=max_samples)
             
             # Calculate split sizes
             total_size = len(pytorch_dataset)

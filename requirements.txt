@@ -3,3 +3,4 @@ ipykernel
 torch>=2.0.0
 requests
 transformer_lens
+gpustat
