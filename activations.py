@@ -30,9 +30,10 @@ class ActivationDataset(Dataset):
 def collect_and_save_activations(
     model: HookedTransformer,
     dataloader: DataLoader,
-    hooks: List[str],  # Changed from layer: int to hooks: List[str]
+    hooks: List[str],
     save_dir: str,
-    dataset_name: str
+    dataset_name: str,
+    print_outputs: bool = False
 ) -> None:
     """Collect activations from model and save to disk
     
@@ -42,9 +43,10 @@ def collect_and_save_activations(
         hooks: List of hook points to collect activations from (e.g. ['blocks.0.hook_resid_post'])
         save_dir: Directory to save activations
         dataset_name: Name of dataset (for saving)
+        print_outputs: Whether to print the questions and answers being processed
     """
     device = next(model.parameters()).device
-    all_activations = {hook: [] for hook in hooks}  # Dict to store activations for each hook
+    all_activations = {hook: [] for hook in hooks}
     all_labels = []
     
     with torch.no_grad():
@@ -57,17 +59,23 @@ def collect_and_save_activations(
             for answers, label in [(syc_answers, 1), (non_syc_answers, 0)]:
                 batch_activations = {hook: [] for hook in hooks}
                 for q, a in zip(questions, answers):
-                    prompt = f"Question: {q}\nAnswer: {a}"
+                    prompt = f"Question: {q}\n{a}"
+                    
+                    if print_outputs:
+                        print(f"\nProcessing {'sycophantic' if label == 1 else 'non-sycophantic'} example:")
+                        print(prompt)
+                        print("-" * 80)
                     
                     # Get activations
+                    tokens = model.to_tokens(prompt)
                     _, cache = model.run_with_cache(
-                        prompt,
+                        tokens,
                         names_filter=hooks
                     )
                     
-                    # Get activation and mean pool over sequence length for each hook
+                    # Get activation for the last token only
                     for hook in hooks:
-                        activation = cache[hook].mean(dim=1)
+                        activation = cache[hook][:, -1]
                         batch_activations[hook].append(activation)
                 
                 # Stack batch activations for each hook

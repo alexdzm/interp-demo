@@ -1,4 +1,4 @@
-from utils import create_dataloaders
+from dataset import create_dataloaders
 
 # Create dataloaders for all datasets
 dataloaders = create_dataloaders(
