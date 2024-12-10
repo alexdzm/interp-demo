@@ -5,3 +5,5 @@ requests
 transformer_lens
 sae-lens
 gpustat
+python-dotenv
+openai
