@@ -7,6 +7,7 @@ from tqdm.auto import tqdm
 from typing import Dict, List, Tuple, Optional
 import json
 import os
+import matplotlib.pyplot as plt
 
 
 class LinearProbe(nn.Module):
@@ -63,28 +64,56 @@ def train_probe(
 
 
 def evaluate_probe(
-    probe: LinearProbe, dataloader: DataLoader, device: torch.device
+    probe: LinearProbe, dataloader: DataLoader, device: torch.device, num_repeats: int = 5
 ) -> Dict[str, float]:
-    """Evaluate probe performance"""
+    """Evaluate probe performance with multiple repeats and bootstrap confidence intervals"""
     probe.eval()
-    correct = 0
-    total = 0
-
+    all_predictions = []
+    all_labels = []
+    
+    # Collect all predictions and labels
     with torch.no_grad():
         for batch in tqdm(dataloader, desc="Evaluating"):
             activations = batch["activation"].to(device)
             labels = batch["label"].to(device)
-
+            
             # Make predictions
             outputs = probe(activations)
             predictions = outputs.squeeze() > 0
-
-            # Calculate accuracy
-            correct += (predictions == labels).sum().item()
-            total += len(labels)
-
-    accuracy = correct / total
-    return {"accuracy": accuracy, "total_samples": total}
+            
+            # Store predictions and labels
+            all_predictions.extend(predictions.cpu().numpy())
+            all_labels.extend(labels.cpu().numpy())
+    
+    all_predictions = np.array(all_predictions)
+    all_labels = np.array(all_labels)
+    total = len(all_labels)
+    
+    # Calculate overall accuracy
+    accuracy = (all_predictions == all_labels).mean()
+    
+    # Bootstrap confidence intervals
+    n_bootstrap = 1000
+    bootstrap_accs = []
+    
+    for _ in range(n_bootstrap):
+        # Sample with replacement
+        indices = np.random.choice(total, size=total, replace=True)
+        bootstrap_preds = all_predictions[indices]
+        bootstrap_labels = all_labels[indices]
+        bootstrap_acc = (bootstrap_preds == bootstrap_labels).mean()
+        bootstrap_accs.append(bootstrap_acc)
+    
+    # Calculate confidence intervals
+    ci_lower = np.percentile(bootstrap_accs, 2.5)
+    ci_upper = np.percentile(bootstrap_accs, 97.5)
+    
+    return {
+        "accuracy": accuracy,
+        "ci_lower": ci_lower,
+        "ci_upper": ci_upper,
+        "total_samples": total
+    }
 
 
 def save_probe_and_results(
@@ -172,3 +201,56 @@ def load_probe_results(
         all_results[file_dataset][file_layer] = data
     
     return all_results
+
+
+def plot_accuracies_by_layer(save_dir: str, model_name: str, dataset_name: str = 'mixed'):
+    """Plot test accuracies across layers with confidence intervals"""
+    # Load results
+    results = load_probe_results(save_dir, model_name, dataset_name)
+    
+    # Extract layers and accuracies with confidence intervals
+    layers = sorted(results[dataset_name].keys())
+    mixed_accs = [results[dataset_name][layer]['results']['mixed']['accuracy'] for layer in layers]
+    mixed_ci_lower = [results[dataset_name][layer]['results']['mixed']['ci_lower'] for layer in layers]
+    mixed_ci_upper = [results[dataset_name][layer]['results']['mixed']['ci_upper'] for layer in layers]
+    
+    pol_accs = [results[dataset_name][layer]['results']['politics']['accuracy'] for layer in layers]
+    pol_ci_lower = [results[dataset_name][layer]['results']['politics']['ci_lower'] for layer in layers]
+    pol_ci_upper = [results[dataset_name][layer]['results']['politics']['ci_upper'] for layer in layers]
+    
+    # Create plot
+    plt.figure(figsize=(10, 6))
+    
+    # Plot accuracies with confidence intervals
+    plt.plot(layers, mixed_accs, 'b-o', label='Mixed Dataset')
+    plt.fill_between(layers, mixed_ci_lower, mixed_ci_upper, color='b', alpha=0.2)
+    
+    plt.plot(layers, pol_accs, 'r-o', label='Politics Dataset')
+    plt.fill_between(layers, pol_ci_lower, pol_ci_upper, color='r', alpha=0.2)
+    
+    # Add labels and title
+    plt.xlabel('Layer')
+    plt.ylabel('Accuracy')
+    plt.title(f'Probe Accuracy by Layer ({model_name})')
+    plt.legend()
+    plt.grid(True)
+    
+    # Add horizontal line at 0.5 for random chance
+    plt.axhline(y=0.5, color='gray', linestyle='--', alpha=0.5)
+    
+    # Set y-axis limits with some padding
+    plt.ylim(0.3, 1.1)
+    
+    plt.show()
+    
+    # Print summary statistics
+    print("\nSummary Statistics:")
+    print(f"Mixed Dataset - Mean Accuracy: {np.mean(mixed_accs):.3f} (95% CI: {np.mean(mixed_ci_lower):.3f}-{np.mean(mixed_ci_upper):.3f})")
+    print(f"Politics Dataset - Mean Accuracy: {np.mean(pol_accs):.3f} (95% CI: {np.mean(pol_ci_lower):.3f}-{np.mean(pol_ci_upper):.3f})")
+    
+    # Find best layers
+    best_mixed_idx = np.argmax(mixed_accs)
+    best_pol_idx = np.argmax(pol_accs)
+    
+    print(f"\nBest Layer for Mixed: {layers[best_mixed_idx]} (Acc: {max(mixed_accs):.3f}, CI: {mixed_ci_lower[best_mixed_idx]:.3f}-{mixed_ci_upper[best_mixed_idx]:.3f})")
+    print(f"Best Layer for Politics: {layers[best_pol_idx]} (Acc: {max(pol_accs):.3f}, CI: {pol_ci_lower[best_pol_idx]:.3f}-{pol_ci_upper[best_pol_idx]:.3f})")
