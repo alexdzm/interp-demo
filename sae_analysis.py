@@ -118,13 +118,11 @@ def save_sae_results(
     # Prepare results for JSON serialization
     json_results = {
         "hook": hook,
-        "results": {
-            dataset_name: results
-        },
+        "results": {dataset_name: results},
         "top_features": [
             {"feature_idx": int(idx), "correlation": float(corr)}
             for idx, corr in top_features
-        ]
+        ],
     }
 
     # Save results as JSON
@@ -198,7 +196,9 @@ def main():
         for feature_idx, correlation in top_features:
             print(f"Feature {feature_idx}: correlation = {correlation}")
 
-        top_features_indices = [f[0] for f in top_features[:1]] #only keep the top fixture
+        top_features_indices = [
+            f[0] for f in top_features[:1]
+        ]  # only keep the top fixture
         # Evaluate on test set with bootstrapping
         test_results = evaluate_sae_features(
             sae, activation_loaders["test"], top_features_indices
@@ -223,7 +223,9 @@ def main():
         )
 
         print(f"Test accuracy: {test_results['accuracy']:.2%}")
-        print(f"95% CI: [{test_results['ci_lower']:.2%}, {test_results['ci_upper']:.2%}]")
+        print(
+            f"95% CI: [{test_results['ci_lower']:.2%}, {test_results['ci_upper']:.2%}]"
+        )
 
         # Calculate basic L0 stats using your activation data
         with torch.no_grad():
@@ -238,10 +240,13 @@ def main():
     for result in results:
         print(f"\nLayer {result['layer']}:")
         print(f"Test accuracy: {result['test_results']['accuracy']:.2%}")
-        print(f"95% CI: [{result['test_results']['ci_lower']:.2%}, {result['test_results']['ci_upper']:.2%}]")
+        print(
+            f"95% CI: [{result['test_results']['ci_lower']:.2%}, {result['test_results']['ci_upper']:.2%}]"
+        )
         print("Top features and correlations:")
         for feature_idx, correlation in result["top_features"]:
             print(f"Feature {feature_idx}: {correlation:.3f}")
+
 
 if __name__ == "__main__":
     main()
